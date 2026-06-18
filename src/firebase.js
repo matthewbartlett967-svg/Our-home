@@ -1,11 +1,6 @@
-// ============================================================
-//  STEP 1: Paste your Firebase config here
-//  Go to: console.firebase.google.com
-//  → Your project → Project Settings → Your apps → SDK setup
-// ============================================================
-
 import { initializeApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
+import { getAuth } from 'firebase/auth'
 
 const firebaseConfig = {
   apiKey: "AIzaSyBTYwqmjep0x3jTfVnfrfh077dOAB1j-4E",
@@ -18,3 +13,4 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig)
 export const db = getFirestore(app)
+export const auth = getAuth(app)

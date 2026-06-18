@@ -3,16 +3,13 @@ import {
   collection, doc, onSnapshot, setDoc, updateDoc, addDoc,
   serverTimestamp, query, orderBy, getDoc
 } from 'firebase/firestore'
-import {
-  signInWithEmailAndPassword, signOut, onAuthStateChanged
-} from 'firebase/auth'
-import { db, auth } from './firebase.js'
+import { db } from './firebase.js'
 
-// Known users — matched by email after login
-const USER_PROFILES = {
-  'matt@ourhome.com':  { name: 'Matt', avatar: 'M', color: '#C4714A' },
-  'tara@ourhome.com':  { name: 'Tara', avatar: 'T', color: '#7A9E87' },
-}
+// Simple user login — no Firebase Auth needed
+const USERS = [
+  { name: 'Matt', avatar: 'M', color: '#C4714A', pin: '1234' },
+  { name: 'Tara', avatar: 'T', color: '#7A9E87', pin: '5678' },
+]
 
 const STATUS_CONFIG = {
   'not-started': { label: 'Not Started', color: '#9CA3AF', bg: '#F3F4F6' },
@@ -97,80 +94,72 @@ function ProgressBar({ spent, estimate }) {
 }
 
 // ─── Login Screen ─────────────────────────────────────────────
-function LoginScreen() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+function LoginScreen({ onLogin }) {
+  const [selected, setSelected] = useState(null)
+  const [pin, setPin] = useState('')
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
 
-  const login = async () => {
-    if (!email || !password) return
-    setLoading(true)
-    setError('')
-    try {
-      await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim())
-    } catch (e) {
-      const code = e.code || ''
-      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
-        setError('Wrong password. Please try again.')
-      } else if (code === 'auth/user-not-found') {
-        setError('Email not found. Check spelling.')
-      } else if (code === 'auth/too-many-requests') {
-        setError('Too many attempts. Wait a few minutes and try again.')
-      } else if (code === 'auth/network-request-failed') {
-        setError('Network error. Check your internet connection.')
-      } else {
-        setError('Error: ' + code + ' — ' + (e.message || ''))
-      }
-      setLoading(false)
+  const login = () => {
+    if (!selected) return
+    const user = USERS.find(u => u.name === selected)
+    if (pin === user.pin) {
+      onLogin(user)
+    } else {
+      setError('Wrong PIN. Try again.')
+      setPin('')
     }
   }
 
   return (
     <div style={{ minHeight: '100vh', background: '#1C2B3A', display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <div style={{ width: '100%', maxWidth: 360 }}>
+      <div style={{ width: '100%', maxWidth: 340 }}>
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🏡</div>
+          <div style={{ fontSize: 52, marginBottom: 12 }}>🏡</div>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, fontWeight: 700,
             color: '#F7F3ED', marginBottom: 6 }}>Our Home</div>
           <div style={{ fontSize: 14, color: '#7A9E87' }}>Matt & Tara's project planner</div>
         </div>
 
         <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 20, padding: 24 }}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#9CA3AF',
-              marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-              placeholder="you@email.com" autoCapitalize="none"
-              onKeyDown={e => e.key === 'Enter' && login()}
-              style={{ width: '100%', padding: '14px 16px', borderRadius: 12, border: '1.5px solid rgba(255,255,255,0.1)',
-                background: 'rgba(255,255,255,0.08)', color: '#F7F3ED', fontSize: 16,
-                outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
-          </div>
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#9CA3AF',
-              marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••" onKeyDown={e => e.key === 'Enter' && login()}
-              style={{ width: '100%', padding: '14px 16px', borderRadius: 12, border: '1.5px solid rgba(255,255,255,0.1)',
-                background: 'rgba(255,255,255,0.08)', color: '#F7F3ED', fontSize: 16,
-                outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#9CA3AF', marginBottom: 12,
+            textTransform: 'uppercase', letterSpacing: '0.05em' }}>Who are you?</div>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
+            {USERS.map(u => (
+              <button key={u.name} onClick={() => { setSelected(u.name); setPin(''); setError('') }}
+                style={{ flex: 1, padding: '16px 0', borderRadius: 14, border: 'none', cursor: 'pointer',
+                  background: selected === u.name ? u.color : 'rgba(255,255,255,0.08)',
+                  color: '#fff', fontWeight: 700, fontSize: 16, transition: 'all 0.2s' }}>
+                <div style={{ fontSize: 24, marginBottom: 4 }}>{u.avatar}</div>
+                {u.name}
+              </button>
+            ))}
           </div>
 
-          {error && (
-            <div style={{ background: 'rgba(196,113,74,0.2)', border: '1px solid rgba(196,113,74,0.4)',
-              borderRadius: 10, padding: '10px 14px', marginBottom: 16, color: '#F0A080', fontSize: 14 }}>
-              {error}
-            </div>
+          {selected && (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#9CA3AF', marginBottom: 8,
+                textTransform: 'uppercase', letterSpacing: '0.05em' }}>Enter your PIN</div>
+              <input type="password" inputMode="numeric" value={pin}
+                onChange={e => setPin(e.target.value)} placeholder="••••"
+                onKeyDown={e => e.key === 'Enter' && login()} maxLength={4}
+                style={{ width: '100%', padding: '14px 16px', borderRadius: 12,
+                  border: '1.5px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.08)',
+                  color: '#F7F3ED', fontSize: 24, outline: 'none', fontFamily: 'inherit',
+                  boxSizing: 'border-box', textAlign: 'center', letterSpacing: '0.3em', marginBottom: 16 }} />
+              {error && (
+                <div style={{ background: 'rgba(196,113,74,0.2)', border: '1px solid rgba(196,113,74,0.4)',
+                  borderRadius: 10, padding: '10px 14px', marginBottom: 16, color: '#F0A080', fontSize: 14, textAlign: 'center' }}>
+                  {error}
+                </div>
+              )}
+              <button onClick={login}
+                style={{ width: '100%', padding: '14px', background: '#C4714A', color: '#fff',
+                  border: 'none', borderRadius: 12, fontWeight: 700, fontSize: 16, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Sign In as {selected}
+              </button>
+            </>
           )}
-
-          <button onClick={login} disabled={loading}
-            style={{ width: '100%', padding: '14px', background: '#C4714A', color: '#fff',
-              border: 'none', borderRadius: 12, fontWeight: 700, fontSize: 16, cursor: 'pointer',
-              opacity: loading ? 0.7 : 1, fontFamily: 'inherit' }}>
-            {loading ? 'Signing in…' : 'Sign In'}
-          </button>
         </div>
       </div>
     </div>
@@ -459,8 +448,9 @@ function ProjectDetail({ project, currentUser, onBack }) {
 
 // ─── Main App ─────────────────────────────────────────────────
 export default function App() {
-  const [user, setUser] = useState(null)
-  const [authLoading, setAuthLoading] = useState(true)
+  const [user, setUser] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('ourhome_user')) } catch { return null }
+  })
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState(null)
@@ -468,21 +458,15 @@ export default function App() {
   const [newP, setNewP] = useState({ name:'', room:'', emoji:'🏠', costEstimate:'', startDate:'', endDate:'', description:'' })
   const seeded = useRef(false)
 
-  // Auth listener
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, firebaseUser => {
-      if (firebaseUser) {
-        const profile = USER_PROFILES[firebaseUser.email.toLowerCase()] || {
-          name: firebaseUser.email, avatar: firebaseUser.email[0].toUpperCase(), color: '#C4714A'
-        }
-        setUser({ ...profile, email: firebaseUser.email, uid: firebaseUser.uid })
-      } else {
-        setUser(null)
-      }
-      setAuthLoading(false)
-    })
-    return unsub
-  }, [])
+  const handleLogin = (u) => {
+    sessionStorage.setItem('ourhome_user', JSON.stringify(u))
+    setUser(u)
+  }
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('ourhome_user')
+    setUser(null)
+  }
 
   // Seed Firestore
   useEffect(() => {
@@ -524,15 +508,7 @@ export default function App() {
     setSelectedId(ref.id)
   }
 
-  if (authLoading) return (
-    <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      flexDirection: 'column', gap: 16, background: '#1C2B3A' }}>
-      <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: '#F7F3ED' }}>Our Home 🏡</div>
-      <div style={{ color: '#7A9E87', fontSize: 14 }}>Loading…</div>
-    </div>
-  )
-
-  if (!user) return <LoginScreen />
+  if (!user) return <LoginScreen onLogin={handleLogin} />
 
   if (selected) return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -597,7 +573,7 @@ export default function App() {
                 color: '#fff', fontWeight: 700, fontSize: 14 }}>{user.avatar}</div>
               <span style={{ color: '#F7F3ED', fontWeight: 600, fontSize: 14 }}>{user.name}</span>
             </div>
-            <button onClick={() => signOut(auth)}
+            <button onClick={handleLogout}
               style={{ padding: '6px 12px', background: 'rgba(255,255,255,0.1)', border: 'none',
                 borderRadius: 8, color: '#9CA3AF', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
               Sign out

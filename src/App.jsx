@@ -4,11 +4,9 @@ import {
   serverTimestamp, query, orderBy, getDoc
 } from 'firebase/firestore'
 import {
-  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
+  signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from 'firebase/auth'
-import { db } from './firebase.js'
-
-const auth = getAuth()
+import { db, auth } from './firebase.js'
 
 // Known users — matched by email after login
 const USER_PROFILES = {

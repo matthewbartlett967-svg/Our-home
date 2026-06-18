@@ -439,6 +439,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null)
   const [currentUser, setCurrentUser] = useState(USERS[0])
   const [showNew, setShowNew] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [newP, setNewP] = useState({ name:'', room:'', emoji:'🏠', costEstimate:'', startDate:'', endDate:'', description:'' })
   const seeded = useRef(false)
 
@@ -500,71 +501,99 @@ export default function App() {
       background: '#F7F3ED', color: '#1C2B3A' }}>
 
       {/* ── Sidebar ── */}
-      <div style={{ width: 270, background: '#1C2B3A', display: 'flex', flexDirection: 'column',
-        overflowY: 'auto', flexShrink: 0 }}>
-        <div style={{ padding: '24px 20px 16px' }}>
-          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700,
-            color: '#F7F3ED', marginBottom: 2 }}>Our Home</div>
-          <div style={{ fontSize: 12, color: '#7A9E87', fontWeight: 500 }}>Matt & Tara</div>
+      <div style={{ width: sidebarOpen ? 270 : 64, background: '#1C2B3A', display: 'flex',
+        flexDirection: 'column', overflowY: 'auto', flexShrink: 0,
+        transition: 'width 0.25s ease', position: 'relative' }}>
+
+        {/* Toggle button */}
+        <button onClick={() => setSidebarOpen(o => !o)}
+          style={{ position: 'absolute', top: 20, right: -12, width: 24, height: 24,
+            borderRadius: '50%', background: '#C4714A', border: 'none', cursor: 'pointer',
+            color: '#fff', fontSize: 14, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: 10, boxShadow: '0 2px 6px rgba(0,0,0,0.2)', fontWeight: 700 }}>
+          {sidebarOpen ? '‹' : '›'}
+        </button>
+
+        {/* Header */}
+        <div style={{ padding: sidebarOpen ? '24px 20px 16px' : '24px 0 16px',
+          display: 'flex', alignItems: 'center', justifyContent: sidebarOpen ? 'flex-start' : 'center' }}>
+          {sidebarOpen ? (
+            <div>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700,
+                color: '#F7F3ED', marginBottom: 2 }}>Our Home</div>
+              <div style={{ fontSize: 12, color: '#7A9E87', fontWeight: 500 }}>Matt & Tara</div>
+            </div>
+          ) : (
+            <span style={{ fontSize: 22 }}>🏡</span>
+          )}
         </div>
 
         {/* User switcher */}
-        <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', gap: 8 }}>
+        <div style={{ padding: sidebarOpen ? '12px 20px' : '12px 8px',
+          borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex',
+          gap: 8, flexDirection: sidebarOpen ? 'row' : 'column' }}>
           {USERS.map(u => (
             <button key={u.name} onClick={() => setCurrentUser(u)}
               style={{ flex: 1, padding: '7px 0', borderRadius: 8, border: 'none',
                 background: currentUser.name === u.name ? u.color : 'rgba(255,255,255,0.07)',
-                color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-              {u.name}
+                color: '#fff', fontWeight: 700, fontSize: sidebarOpen ? 13 : 11, cursor: 'pointer' }}>
+              {sidebarOpen ? u.name : u.avatar}
             </button>
           ))}
         </div>
 
-        {/* Stats */}
-        <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr',
-          gap: 10, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-          {[
-            { label: 'Total Budget', value: fmt(totalBudget) },
-            { label: 'Spent',        value: fmt(totalSpent) },
-            { label: 'In Progress',  value: inProgress },
-            { label: 'Projects',     value: projects.length },
-          ].map(s => (
-            <div key={s.label} style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 12px' }}>
-              <div style={{ fontSize: 17, fontWeight: 800, color: '#F7F3ED' }}>{s.value}</div>
-              <div style={{ fontSize: 11, color: '#7A9E87', marginTop: 2 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
+        {/* Stats - only when open */}
+        {sidebarOpen && (
+          <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr',
+            gap: 10, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            {[
+              { label: 'Total Budget', value: fmt(totalBudget) },
+              { label: 'Spent',        value: fmt(totalSpent) },
+              { label: 'In Progress',  value: inProgress },
+              { label: 'Projects',     value: projects.length },
+            ].map(s => (
+              <div key={s.label} style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '10px 12px' }}>
+                <div style={{ fontSize: 17, fontWeight: 800, color: '#F7F3ED' }}>{s.value}</div>
+                <div style={{ fontSize: 11, color: '#7A9E87', marginTop: 2 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Project list */}
-        <div style={{ flex: 1, padding: '14px 10px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)',
-            letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px', marginBottom: 6 }}>
-            Projects
-          </div>
+        <div style={{ flex: 1, padding: sidebarOpen ? '14px 10px' : '14px 6px' }}>
+          {sidebarOpen && (
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)',
+              letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px', marginBottom: 6 }}>
+              Projects
+            </div>
+          )}
           {projects.map(p => (
             <button key={p.id} onClick={() => { setSelectedId(p.id); setShowNew(false) }}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                padding: '10px 10px', borderRadius: 10, border: 'none',
+              style={{ display: 'flex', alignItems: 'center', gap: sidebarOpen ? 10 : 0,
+                justifyContent: sidebarOpen ? 'flex-start' : 'center',
+                width: '100%', padding: '10px', borderRadius: 10, border: 'none',
                 background: selectedId === p.id ? 'rgba(196,113,74,0.2)' : 'transparent',
                 cursor: 'pointer', textAlign: 'left', marginBottom: 2,
                 borderLeft: selectedId === p.id ? '3px solid #C4714A' : '3px solid transparent' }}>
-              <span style={{ fontSize: 18 }}>{p.emoji}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#F7F3ED',
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
-                <div style={{ fontSize: 11, color: STATUS_CONFIG[p.status]?.color || '#9CA3AF', marginTop: 1 }}>
-                  {STATUS_CONFIG[p.status]?.label || ''}
+              <span style={{ fontSize: 18 }} title={p.name}>{p.emoji}</span>
+              {sidebarOpen && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#F7F3ED',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
+                  <div style={{ fontSize: 11, color: STATUS_CONFIG[p.status]?.color || '#9CA3AF', marginTop: 1 }}>
+                    {STATUS_CONFIG[p.status]?.label || ''}
+                  </div>
                 </div>
-              </div>
+              )}
             </button>
           ))}
           <button onClick={() => { setShowNew(true); setSelectedId(null) }}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-              padding: '10px 10px', borderRadius: 10, border: '1.5px dashed rgba(255,255,255,0.2)',
-              background: 'transparent', cursor: 'pointer', color: 'rgba(255,255,255,0.5)',
-              fontSize: 13, fontWeight: 600, marginTop: 8 }}>
-            + New Project
+            style={{ display: 'flex', alignItems: 'center', justifyContent: sidebarOpen ? 'flex-start' : 'center',
+              gap: 8, width: '100%', padding: '10px', borderRadius: 10,
+              border: '1.5px dashed rgba(255,255,255,0.2)', background: 'transparent',
+              cursor: 'pointer', color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: 600, marginTop: 8 }}>
+            {sidebarOpen ? '+ New Project' : '+'}
           </button>
         </div>
       </div>

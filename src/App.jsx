@@ -505,13 +505,13 @@ export default function App() {
         flexDirection: 'column', overflowY: 'auto', flexShrink: 0,
         transition: 'width 0.25s ease', position: 'relative' }}>
 
-        {/* Toggle button */}
+        {/* Toggle button - at bottom, thumb friendly */}
         <button onClick={() => setSidebarOpen(o => !o)}
-          style={{ position: 'absolute', top: 20, right: -12, width: 24, height: 24,
-            borderRadius: '50%', background: '#C4714A', border: 'none', cursor: 'pointer',
-            color: '#fff', fontSize: 14, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', zIndex: 10, boxShadow: '0 2px 6px rgba(0,0,0,0.2)', fontWeight: 700 }}>
-          {sidebarOpen ? '‹' : '›'}
+          style={{ position: 'absolute', bottom: 24, right: -18, width: 36, height: 36,
+            borderRadius: '50%', background: '#C4714A', border: '3px solid #F7F3ED', cursor: 'pointer',
+            color: '#fff', fontSize: 16, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: 10, boxShadow: '0 2px 10px rgba(0,0,0,0.35)', fontWeight: 900 }}>
+          {sidebarOpen ? '←' : '→'}
         </button>
 
         {/* Header */}

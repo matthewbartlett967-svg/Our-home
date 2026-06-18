@@ -108,9 +108,20 @@ function LoginScreen() {
     setLoading(true)
     setError('')
     try {
-      await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password)
+      await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim())
     } catch (e) {
-      setError('Incorrect email or password. Please try again.')
+      const code = e.code || ''
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
+        setError('Wrong password. Please try again.')
+      } else if (code === 'auth/user-not-found') {
+        setError('Email not found. Check spelling.')
+      } else if (code === 'auth/too-many-requests') {
+        setError('Too many attempts. Wait a few minutes and try again.')
+      } else if (code === 'auth/network-request-failed') {
+        setError('Network error. Check your internet connection.')
+      } else {
+        setError('Error: ' + code + ' — ' + (e.message || ''))
+      }
       setLoading(false)
     }
   }

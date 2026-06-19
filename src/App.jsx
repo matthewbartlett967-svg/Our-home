@@ -5,11 +5,22 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase.js'
 
-// Simple user login — no Firebase Auth needed
-const USERS = [
+// Default users — PINs/names/avatars can be changed per-user and are saved to localStorage
+const DEFAULT_USERS = [
   { name: 'Matt', avatar: 'M', color: '#C4714A', pin: '1234' },
   { name: 'Tara', avatar: 'T', color: '#7A9E87', pin: '5678' },
 ]
+
+function getUsers() {
+  try {
+    const saved = localStorage.getItem('ourhome_users')
+    return saved ? JSON.parse(saved) : DEFAULT_USERS
+  } catch { return DEFAULT_USERS }
+}
+
+function saveUsers(users) {
+  localStorage.setItem('ourhome_users', JSON.stringify(users))
+}
 
 const STATUS_CONFIG = {
   'not-started': { label: 'Not Started', color: '#9CA3AF', bg: '#F3F4F6' },
@@ -55,7 +66,8 @@ const SEED_PROJECTS = [
   },
 ]
 
-function fmt(n) { return '$' + (n || 0).toLocaleString() }
+// £ currency formatter
+function fmt(n) { return '£' + (n || 0).toLocaleString('en-GB') }
 
 function timeAgo(ts) {
   if (!ts) return 'Just now'
@@ -95,13 +107,14 @@ function ProgressBar({ spent, estimate }) {
 
 // ─── Login Screen ─────────────────────────────────────────────
 function LoginScreen({ onLogin }) {
+  const [users] = useState(getUsers)
   const [selected, setSelected] = useState(null)
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
 
   const login = () => {
     if (!selected) return
-    const user = USERS.find(u => u.name === selected)
+    const user = users.find(u => u.name === selected)
     if (pin === user.pin) {
       onLogin(user)
     } else {
@@ -120,29 +133,27 @@ function LoginScreen({ onLogin }) {
             color: '#F7F3ED', marginBottom: 6 }}>Our Home</div>
           <div style={{ fontSize: 14, color: '#7A9E87' }}>Matt & Tara's project planner</div>
         </div>
-
         <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 20, padding: 24 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#9CA3AF', marginBottom: 12,
             textTransform: 'uppercase', letterSpacing: '0.05em' }}>Who are you?</div>
           <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
-            {USERS.map(u => (
+            {users.map(u => (
               <button key={u.name} onClick={() => { setSelected(u.name); setPin(''); setError('') }}
                 style={{ flex: 1, padding: '16px 0', borderRadius: 14, border: 'none', cursor: 'pointer',
                   background: selected === u.name ? u.color : 'rgba(255,255,255,0.08)',
                   color: '#fff', fontWeight: 700, fontSize: 16, transition: 'all 0.2s' }}>
-                <div style={{ fontSize: 24, marginBottom: 4 }}>{u.avatar}</div>
+                <div style={{ fontSize: 28, marginBottom: 4 }}>{u.avatar}</div>
                 {u.name}
               </button>
             ))}
           </div>
-
           {selected && (
             <>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#9CA3AF', marginBottom: 8,
                 textTransform: 'uppercase', letterSpacing: '0.05em' }}>Enter your PIN</div>
               <input type="password" inputMode="numeric" value={pin}
                 onChange={e => setPin(e.target.value)} placeholder="••••"
-                onKeyDown={e => e.key === 'Enter' && login()} maxLength={4}
+                onKeyDown={e => e.key === 'Enter' && login()} maxLength={6}
                 style={{ width: '100%', padding: '14px 16px', borderRadius: 12,
                   border: '1.5px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.08)',
                   color: '#F7F3ED', fontSize: 24, outline: 'none', fontFamily: 'inherit',
@@ -160,6 +171,123 @@ function LoginScreen({ onLogin }) {
               </button>
             </>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Account Settings ─────────────────────────────────────────
+const AVATARS = ['M','T','A','B','C','D','E','F','G','H','J','K','L','N','P','R','S','V','W','Z',
+  '🏠','🌿','🛠','⭐','🌙','🔥','💎','🎯','🏡','✨']
+
+function AccountSettings({ user, onBack, onUpdate }) {
+  const [name, setName] = useState(user.name)
+  const [pin, setPin] = useState('')
+  const [confirmPin, setConfirmPin] = useState('')
+  const [avatar, setAvatar] = useState(user.avatar)
+  const [saved, setSaved] = useState('')
+  const [pinError, setPinError] = useState('')
+
+  const saveName = () => {
+    if (!name.trim()) return
+    const users = getUsers()
+    const updated = users.map(u => u.name === user.name ? { ...u, name: name.trim() } : u)
+    saveUsers(updated)
+    onUpdate({ ...user, name: name.trim() })
+    setSaved('Name updated!')
+    setTimeout(() => setSaved(''), 2000)
+  }
+
+  const savePin = () => {
+    setPinError('')
+    if (pin.length < 4) { setPinError('PIN must be at least 4 digits'); return }
+    if (pin !== confirmPin) { setPinError('PINs do not match'); return }
+    const users = getUsers()
+    const updated = users.map(u => u.name === user.name ? { ...u, pin } : u)
+    saveUsers(updated)
+    onUpdate({ ...user, pin })
+    setPin(''); setConfirmPin('')
+    setSaved('PIN updated!')
+    setTimeout(() => setSaved(''), 2000)
+  }
+
+  const saveAvatar = (a) => {
+    setAvatar(a)
+    const users = getUsers()
+    const updated = users.map(u => u.name === user.name ? { ...u, avatar: a } : u)
+    saveUsers(updated)
+    onUpdate({ ...user, avatar: a })
+    setSaved('Avatar updated!')
+    setTimeout(() => setSaved(''), 2000)
+  }
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column',
+      fontFamily: "'Inter', system-ui, sans-serif", background: '#F7F3ED' }}>
+      <div style={{ background: '#1C2B3A', padding: '16px', paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#7A9E87',
+          fontWeight: 600, cursor: 'pointer', fontSize: 14, padding: '0 0 12px', display: 'block' }}>
+          ← Back
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 52, height: 52, borderRadius: '50%', background: user.color,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', fontWeight: 700, fontSize: 22 }}>{avatar}</div>
+          <div>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700, color: '#F7F3ED' }}>
+              Account Settings
+            </div>
+            <div style={{ fontSize: 13, color: '#7A9E87', marginTop: 2 }}>{user.name}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+        {saved && (
+          <div style={{ background: '#EDF4EF', border: '1px solid #7A9E87', borderRadius: 10,
+            padding: '10px 14px', color: '#4A7C6F', fontWeight: 600, fontSize: 14, textAlign: 'center' }}>
+            ✓ {saved}
+          </div>
+        )}
+
+        {/* Change Name */}
+        <div style={crd}>
+          <div style={sL}>Change Name</div>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name"
+            style={{ width: '100%', ...iS, fontSize: 16, marginBottom: 10, boxSizing: 'border-box' }} />
+          <button onClick={saveName} style={{ ...bP, width: '100%' }}>Save Name</button>
+        </div>
+
+        {/* Change PIN */}
+        <div style={crd}>
+          <div style={sL}>Change PIN</div>
+          <input type="password" inputMode="numeric" value={pin}
+            onChange={e => setPin(e.target.value)} placeholder="New PIN (4-6 digits)" maxLength={6}
+            style={{ width: '100%', ...iS, fontSize: 16, marginBottom: 10, boxSizing: 'border-box' }} />
+          <input type="password" inputMode="numeric" value={confirmPin}
+            onChange={e => setConfirmPin(e.target.value)} placeholder="Confirm PIN" maxLength={6}
+            style={{ width: '100%', ...iS, fontSize: 16, marginBottom: 10, boxSizing: 'border-box' }} />
+          {pinError && <div style={{ color: '#C4714A', fontSize: 13, marginBottom: 10 }}>{pinError}</div>}
+          <button onClick={savePin} style={{ ...bP, width: '100%' }}>Save PIN</button>
+        </div>
+
+        {/* Change Avatar */}
+        <div style={crd}>
+          <div style={sL}>Change Avatar</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+            {AVATARS.map(a => (
+              <button key={a} onClick={() => saveAvatar(a)}
+                style={{ width: '100%', aspectRatio: '1', borderRadius: 12, border: 'none',
+                  background: avatar === a ? user.color : '#F3F4F6',
+                  color: avatar === a ? '#fff' : '#374151',
+                  fontSize: 18, cursor: 'pointer', fontWeight: 700,
+                  boxShadow: avatar === a ? '0 2px 8px rgba(0,0,0,0.15)' : 'none' }}>
+                {a}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -257,6 +385,74 @@ function MoodBoard({ moodBoard, onMoodChange }) {
   )
 }
 
+// ─── Images Tab ───────────────────────────────────────────────
+function ImagesTab({ projectId }) {
+  const [images, setImages] = useState([])
+  const [loading, setLoading] = useState(true)
+  const fileRef = useRef(null)
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'projects', projectId, 'images'), snap => {
+      setImages(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+      setLoading(false)
+    })
+    return unsub
+  }, [projectId])
+
+  const upload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = async (ev) => {
+      await addDoc(collection(db, 'projects', projectId, 'images'), {
+        data: ev.target.result,
+        name: file.name,
+        createdAt: serverTimestamp(),
+      })
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const deleteImage = async (id) => {
+    const ref = doc(db, 'projects', projectId, 'images', id)
+    await updateDoc(ref, { deleted: true }).catch(() => {})
+    setImages(imgs => imgs.filter(i => i.id !== id))
+  }
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#9CA3AF' }}>Loading…</div>
+
+  return (
+    <div style={{ padding: 16 }}>
+      <input type="file" accept="image/*" ref={fileRef} onChange={upload} style={{ display: 'none' }} />
+      <button onClick={() => fileRef.current.click()}
+        style={{ ...bP, width: '100%', marginBottom: 16, padding: 14, borderRadius: 12, fontSize: 15 }}>
+        📷 Add Photo
+      </button>
+      {images.filter(i => !i.deleted).length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9CA3AF' }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>📷</div>
+          <div style={{ fontWeight: 600 }}>No photos yet</div>
+          <div style={{ fontSize: 13, marginTop: 4 }}>Tap "Add Photo" to attach images to this project.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+          {images.filter(i => !i.deleted).map(img => (
+            <div key={img.id} style={{ position: 'relative', borderRadius: 12, overflow: 'hidden',
+              border: '1px solid #EDE8E1', aspectRatio: '1' }}>
+              <img src={img.data} alt={img.name}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <button onClick={() => deleteImage(img.id)}
+                style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.5)',
+                  border: 'none', borderRadius: '50%', width: 26, height: 26, cursor: 'pointer',
+                  color: '#fff', fontSize: 14, lineHeight: '26px', textAlign: 'center' }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Discussion ───────────────────────────────────────────────
 function Discussion({ projectId, currentUser }) {
   const [messages, setMessages] = useState([])
@@ -279,11 +475,8 @@ function Discussion({ projectId, currentUser }) {
     if (!text.trim()) return
     const msg = text.trim(); setText('')
     await addDoc(collection(db, 'projects', projectId, 'messages'), {
-      author: currentUser.name,
-      avatar: currentUser.avatar,
-      color: currentUser.color,
-      text: msg,
-      createdAt: serverTimestamp(),
+      author: currentUser.name, avatar: currentUser.avatar, color: currentUser.color,
+      text: msg, createdAt: serverTimestamp(),
     })
   }
 
@@ -296,27 +489,22 @@ function Discussion({ projectId, currentUser }) {
           <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9CA3AF' }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
             <div style={{ fontWeight: 600 }}>No messages yet</div>
-            <div style={{ fontSize: 13, marginTop: 4 }}>Start the conversation!</div>
           </div>
         ) : messages.map(msg => {
           const isMe = msg.author === currentUser.name
           const bubbleColor = msg.color || (isMe ? '#C4714A' : '#7A9E87')
           return (
-            <div key={msg.id} style={{ display: 'flex', gap: 8, marginBottom: 14,
-              flexDirection: isMe ? 'row-reverse' : 'row' }}>
+            <div key={msg.id} style={{ display: 'flex', gap: 8, marginBottom: 14, flexDirection: isMe ? 'row-reverse' : 'row' }}>
               <div style={{ width: 34, height: 34, borderRadius: '50%', background: bubbleColor,
                 color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
-                {msg.avatar}
-              </div>
+                fontWeight: 700, fontSize: 14, flexShrink: 0 }}>{msg.avatar}</div>
               <div style={{ maxWidth: '75%' }}>
                 <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 3,
                   textAlign: isMe ? 'right' : 'left', fontWeight: 600 }}>
                   {msg.author} · {timeAgo(msg.createdAt)}
                 </div>
-                <div style={{ background: isMe ? bubbleColor : '#fff',
-                  color: isMe ? '#fff' : '#1C2B3A', padding: '10px 13px',
-                  borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                <div style={{ background: isMe ? bubbleColor : '#fff', color: isMe ? '#fff' : '#1C2B3A',
+                  padding: '10px 13px', borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
                   fontSize: 15, lineHeight: 1.5, boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
                   border: isMe ? 'none' : '1px solid #EDE8E1' }}>
                   {msg.text}
@@ -344,17 +532,20 @@ function Discussion({ projectId, currentUser }) {
 function ProjectDetail({ project, currentUser, onBack }) {
   const [tab, setTab] = useState('overview')
   const [editingStatus, setEditingStatus] = useState(false)
-  const [editingCost, setEditingCost] = useState(false)
-  const [costInput, setCostInput] = useState(project.costSpent || 0)
+  const [editingBudget, setEditingBudget] = useState(false)
+  const [editingSpent, setEditingSpent] = useState(false)
+  const [budgetInput, setBudgetInput] = useState(project.costEstimate || 0)
+  const [spentInput, setSpentInput] = useState(project.costSpent || 0)
+  const isMatt = currentUser.name === 'Matt'
 
   const updateField = async (fields) => { await updateDoc(doc(db, 'projects', project.id), fields) }
   const updateStatus = async (status) => { await updateField({ status }); setEditingStatus(false) }
-  const saveCost = async () => { await updateField({ costSpent: Number(costInput) }); setEditingCost(false) }
+  const saveBudget = async () => { await updateField({ costEstimate: Number(budgetInput) }); setEditingBudget(false) }
+  const saveSpent = async () => { await updateField({ costSpent: Number(spentInput) }); setEditingSpent(false) }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#F7F3ED' }}>
-      <div style={{ background: '#1C2B3A', padding: '16px 16px 0',
-        paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
+      <div style={{ background: '#1C2B3A', padding: '16px 16px 0', paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#7A9E87',
           fontWeight: 600, cursor: 'pointer', fontSize: 14, padding: '0 0 12px', display: 'block' }}>
           ← Back
@@ -385,11 +576,11 @@ function ProjectDetail({ project, currentUser, onBack }) {
           </div>
         </div>
         <div style={{ display: 'flex' }}>
-          {[['overview','Overview'],['discussion','Chat'],['moodboard','Mood Board']].map(([id, label]) => (
+          {[['overview','Overview'],['discussion','Chat'],['moodboard','Mood Board'],['images','Photos']].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)}
               style={{ flex: 1, padding: '10px 0', border: 'none', fontFamily: 'inherit',
                 borderBottom: tab === id ? '2.5px solid #C4714A' : '2.5px solid transparent',
-                background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: tab === id ? 700 : 500,
+                background: 'none', cursor: 'pointer', fontSize: 12, fontWeight: tab === id ? 700 : 500,
                 color: tab === id ? '#C4714A' : 'rgba(255,255,255,0.45)' }}>
               {label}
             </button>
@@ -405,21 +596,44 @@ function ProjectDetail({ project, currentUser, onBack }) {
             </div>
             <div style={crd}>
               <div style={sL}>Budget</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: '#1C2B3A', fontFamily: "'Playfair Display', serif" }}>
-                {fmt(project.costEstimate)}
+              {/* Total budget — Matt only */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 4 }}>Total Budget Allocated</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: '#1C2B3A', fontFamily: "'Playfair Display', serif" }}>
+                    {fmt(project.costEstimate)}
+                  </div>
+                  {isMatt && !editingBudget && (
+                    <button onClick={() => { setEditingBudget(true); setBudgetInput(project.costEstimate || 0) }}
+                      style={{ fontSize: 12, color: '#7A9E87', background: 'none', border: 'none',
+                        cursor: 'pointer', fontWeight: 600, padding: 0 }}>Edit</button>
+                  )}
+                </div>
+                {editingBudget && isMatt && (
+                  <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                    <input type="number" value={budgetInput} onChange={e => setBudgetInput(e.target.value)}
+                      style={{ ...iS, width: 130 }} />
+                    <button onClick={saveBudget} style={bP}>Save</button>
+                    <button onClick={() => setEditingBudget(false)} style={bS}>✕</button>
+                  </div>
+                )}
+                {!isMatt && (
+                  <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>Only Matt can edit the budget</div>
+                )}
               </div>
               <ProgressBar spent={project.costSpent || 0} estimate={project.costEstimate} />
-              <button onClick={() => { setEditingCost(true); setCostInput(project.costSpent || 0) }}
+              {/* Amount spent — both can edit */}
+              <button onClick={() => { setEditingSpent(true); setSpentInput(project.costSpent || 0) }}
                 style={{ marginTop: 10, fontSize: 13, color: '#7A9E87', background: 'none',
                   border: 'none', cursor: 'pointer', fontWeight: 600, padding: 0 }}>
                 Update amount spent →
               </button>
-              {editingCost && (
+              {editingSpent && (
                 <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-                  <input type="number" value={costInput} onChange={e => setCostInput(e.target.value)}
-                    style={{ ...iS, width: 120 }} />
-                  <button onClick={saveCost} style={bP}>Save</button>
-                  <button onClick={() => setEditingCost(false)} style={bS}>✕</button>
+                  <input type="number" value={spentInput} onChange={e => setSpentInput(e.target.value)}
+                    style={{ ...iS, width: 130 }} />
+                  <button onClick={saveSpent} style={bP}>Save</button>
+                  <button onClick={() => setEditingSpent(false)} style={bS}>✕</button>
                 </div>
               )}
             </div>
@@ -441,6 +655,7 @@ function ProjectDetail({ project, currentUser, onBack }) {
             onMoodChange={(mb) => updateDoc(doc(db, 'projects', project.id), { moodBoard: mb })}
           />
         )}
+        {tab === 'images' && <ImagesTab projectId={project.id} />}
       </div>
     </div>
   )
@@ -455,20 +670,17 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState(null)
   const [showNew, setShowNew] = useState(false)
+  const [showAccount, setShowAccount] = useState(false)
   const [newP, setNewP] = useState({ name:'', room:'', emoji:'🏠', costEstimate:'', startDate:'', endDate:'', description:'' })
   const seeded = useRef(false)
 
-  const handleLogin = (u) => {
-    sessionStorage.setItem('ourhome_user', JSON.stringify(u))
-    setUser(u)
+  const handleLogin = (u) => { sessionStorage.setItem('ourhome_user', JSON.stringify(u)); setUser(u) }
+  const handleLogout = () => { sessionStorage.removeItem('ourhome_user'); setUser(null) }
+  const handleUserUpdate = (updated) => {
+    sessionStorage.setItem('ourhome_user', JSON.stringify(updated))
+    setUser(updated)
   }
 
-  const handleLogout = () => {
-    sessionStorage.removeItem('ourhome_user')
-    setUser(null)
-  }
-
-  // Seed Firestore
   useEffect(() => {
     if (!user) return
     const seed = async () => {
@@ -483,7 +695,6 @@ export default function App() {
     seed()
   }, [user])
 
-  // Real-time listener
   useEffect(() => {
     if (!user) return
     const unsub = onSnapshot(collection(db, 'projects'), snap => {
@@ -510,6 +721,10 @@ export default function App() {
 
   if (!user) return <LoginScreen onLogin={handleLogin} />
 
+  if (showAccount) return (
+    <AccountSettings user={user} onBack={() => setShowAccount(false)} onUpdate={handleUserUpdate} />
+  )
+
   if (selected) return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Inter', system-ui, sans-serif" }}>
       <ProjectDetail project={selected} currentUser={user} onBack={() => setSelectedId(null)} />
@@ -528,7 +743,7 @@ export default function App() {
           { label: 'Project Name', key: 'name', placeholder: 'e.g. Living Room Repaint' },
           { label: 'Room / Area', key: 'room', placeholder: 'e.g. Living Room' },
           { label: 'Emoji', key: 'emoji', placeholder: '🏠' },
-          { label: 'Budget Estimate ($)', key: 'costEstimate', placeholder: '5000', type: 'number' },
+          { label: 'Budget Estimate (£)', key: 'costEstimate', placeholder: '5000', type: 'number' },
           { label: 'Start Date', key: 'startDate', type: 'date' },
           { label: 'End Date', key: 'endDate', type: 'date' },
         ].map(f => (
@@ -555,8 +770,6 @@ export default function App() {
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column',
       fontFamily: "'Inter', system-ui, sans-serif", background: '#F7F3ED' }}>
-
-      {/* Header */}
       <div style={{ background: '#1C2B3A', padding: '16px', paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <div>
@@ -565,23 +778,23 @@ export default function App() {
             </div>
             <div style={{ fontSize: 12, color: '#7A9E87', marginTop: 2 }}>Matt & Tara</div>
           </div>
-          {/* Signed in user + sign out */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <div style={{ width: 32, height: 32, borderRadius: '50%', background: user.color,
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Tappable user avatar → account settings */}
+            <button onClick={() => setShowAccount(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(255,255,255,0.08)',
+                border: 'none', borderRadius: 20, padding: '6px 12px 6px 6px', cursor: 'pointer' }}>
+              <div style={{ width: 30, height: 30, borderRadius: '50%', background: user.color,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: '#fff', fontWeight: 700, fontSize: 14 }}>{user.avatar}</div>
               <span style={{ color: '#F7F3ED', fontWeight: 600, fontSize: 14 }}>{user.name}</span>
-            </div>
+            </button>
             <button onClick={handleLogout}
-              style={{ padding: '6px 12px', background: 'rgba(255,255,255,0.1)', border: 'none',
+              style={{ padding: '6px 12px', background: 'rgba(255,255,255,0.08)', border: 'none',
                 borderRadius: 8, color: '#9CA3AF', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
               Sign out
             </button>
           </div>
         </div>
-
-        {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
           {[
             { label: 'Budget', value: fmt(totalBudget) },
@@ -598,9 +811,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Project list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 16,
-        paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16, paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 40, color: '#9CA3AF' }}>Loading projects…</div>
         ) : (

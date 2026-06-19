@@ -62,9 +62,11 @@ function ProgressBar({ spent, estimate }) {
 // ─── Auth Screens ─────────────────────────────────────────────
 function AuthScreen({ onAuth }) {
   const [mode, setMode] = useState('login') // login | signup | reset
-  const [name, setName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
@@ -85,12 +87,14 @@ function AuthScreen({ onAuth }) {
   }
 
   const handleSignup = async () => {
-    if (!name || !email || !password) { setError('Please fill in all fields.'); return }
+    if (!firstName || !lastName || !email || !password || !confirmPassword) { setError('Please fill in all fields.'); return }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return }
+    if (password !== confirmPassword) { setError('Passwords do not match. Please try again.'); return }
     setLoading(true); setError('')
+    const fullName = firstName.trim() + ' ' + lastName.trim()
     try {
       const cred = await createUserWithEmailAndPassword(auth, email.trim().toLowerCase(), password)
-      await updateProfile(cred.user, { displayName: name.trim() })
+      await updateProfile(cred.user, { displayName: fullName })
     } catch (e) {
       const code = e.code || ''
       if (code === 'auth/email-already-in-use') setError('An account with this email already exists.')
@@ -133,10 +137,12 @@ function AuthScreen({ onAuth }) {
           {error && <div style={{ background: 'rgba(196,113,74,0.2)', border: '1px solid rgba(196,113,74,0.4)', borderRadius: 10, padding: '10px 14px', marginBottom: 16, color: '#F0A080', fontSize: 14 }}>{error}</div>}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {mode === 'signup' && (
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name"
+            {mode === 'signup' && (<>
+              <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="First name"
                 style={{ ...iS, background: 'rgba(255,255,255,0.08)', border: '1.5px solid rgba(255,255,255,0.15)', color: '#F7F3ED' }} />
-            )}
+              <input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Last name"
+                style={{ ...iS, background: 'rgba(255,255,255,0.08)', border: '1.5px solid rgba(255,255,255,0.15)', color: '#F7F3ED' }} />
+            </>)}
             <input type="email" value={email} onChange={e => setEmail(e.target.value)}
               placeholder="Email address" autoCapitalize="none"
               onKeyDown={e => e.key === 'Enter' && (mode === 'login' ? handleLogin() : mode === 'signup' ? handleSignup() : handleReset())}
@@ -145,6 +151,12 @@ function AuthScreen({ onAuth }) {
               <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                 placeholder={mode === 'signup' ? 'Password (min 6 characters)' : 'Password'}
                 onKeyDown={e => e.key === 'Enter' && (mode === 'login' ? handleLogin() : handleSignup())}
+                style={{ ...iS, background: 'rgba(255,255,255,0.08)', border: '1.5px solid rgba(255,255,255,0.15)', color: '#F7F3ED' }} />
+            )}
+            {mode === 'signup' && (
+              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                placeholder="Confirm password"
+                onKeyDown={e => e.key === 'Enter' && handleSignup()}
                 style={{ ...iS, background: 'rgba(255,255,255,0.08)', border: '1.5px solid rgba(255,255,255,0.15)', color: '#F7F3ED' }} />
             )}
             <button onClick={mode === 'login' ? handleLogin : mode === 'signup' ? handleSignup : handleReset}
@@ -198,8 +210,11 @@ function OnboardingScreen({ user, onComplete }) {
         inviteCode: code,
         createdAt: serverTimestamp(),
       })
+      const nameParts = (user.displayName || user.email).split(' ')
       await setDoc(doc(db, 'users', user.uid), {
         name: user.displayName || user.email,
+        firstName: nameParts[0] || '',
+        lastName: nameParts.slice(1).join(' ') || '',
         email: user.email,
         avatar,
         homeId: homeRef.id,
@@ -228,8 +243,11 @@ function OnboardingScreen({ user, onComplete }) {
         members: [...homeData.members, user.uid],
         memberEmails: [...(homeData.memberEmails || []), user.email],
       })
+      const nameParts2 = (user.displayName || user.email).split(' ')
       await setDoc(doc(db, 'users', user.uid), {
         name: user.displayName || user.email,
+        firstName: nameParts2[0] || '',
+        lastName: nameParts2.slice(1).join(' ') || '',
         email: user.email,
         avatar,
         homeId: homeDoc.id,

@@ -87,11 +87,14 @@ function AuthScreen() {
     if (!firstName || !lastName || !email || !password || !confirmPassword) { setError('Please fill in all fields.'); return }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return }
     if (password !== confirmPassword) { setError('Passwords do not match.'); return }
+    // FIX 12: reset loading on all paths
     setLoading(true); setError('')
     const fullName = firstName.trim() + ' ' + lastName.trim()
     try {
       const cred = await createUserWithEmailAndPassword(auth, email.trim().toLowerCase(), password)
+      // FIX 5: await profile update before auth state fires
       await updateProfile(cred.user, { displayName: fullName })
+      await cred.user.reload()
     } catch (e) {
       const code = e.code || ''
       if (code.includes('email-already-in-use')) setError('An account with this email already exists.')
@@ -300,10 +303,10 @@ function TaskChecklist({ projectId, homeId }) {
         <div style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#6B7280', marginBottom: 6 }}>
             <span>{done} of {tasks.length} complete</span>
-            <span>{Math.round((done / tasks.length) * 100)}%</span>
+            <span>{tasks.length ? Math.round((done / tasks.length) * 100) : 0}%</span>
           </div>
           <div style={{ height: 6, background: '#E5E7EB', borderRadius: 99 }}>
-            <div style={{ height: '100%', width: (done / tasks.length * 100) + '%', background: '#7A9E87', borderRadius: 99, transition: 'width 0.4s' }} />
+            <div style={{ height: '100%', width: (tasks.length ? done / tasks.length * 100 : 0) + '%', background: '#7A9E87', borderRadius: 99, transition: 'width 0.4s' }} />
           </div>
         </div>
       )}
@@ -342,6 +345,7 @@ function ReceiptsTab({ projectId, homeId }) {
   const [receipts, setReceipts] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ description: '', amount: '', date: '', image: null })
   const fileRef = useRef(null)
 
@@ -365,7 +369,9 @@ function ReceiptsTab({ projectId, homeId }) {
       if (w > h && w > MAX) { h = (h * MAX) / w; w = MAX }
       else if (h > MAX) { w = (w * MAX) / h; h = MAX }
       canvas.width = w; canvas.height = h
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      const ctx2d = canvas.getContext('2d')
+      if (!ctx2d) { URL.revokeObjectURL(url); return }
+      ctx2d.drawImage(img, 0, 0, w, h)
       setForm(f => ({ ...f, image: canvas.toDataURL('image/jpeg', 0.7) }))
       URL.revokeObjectURL(url)
     }
@@ -395,7 +401,7 @@ function ReceiptsTab({ projectId, homeId }) {
             <button onClick={() => fileRef.current.click()} style={{ ...bS, textAlign: 'left' }}>📷 {form.image ? 'Receipt photo attached ✓' : 'Attach receipt photo'}</button>
             {form.image && <img src={form.image} alt="Receipt" style={{ width: '100%', borderRadius: 8, maxHeight: 200, objectFit: 'cover' }} />}
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={save} style={{ ...bP, flex: 1 }}>Save Receipt</button>
+              <button onClick={async () => { setSaving(true); await save(); setSaving(false) }} disabled={saving} style={{ ...bP, flex: 1, opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving…' : 'Save Receipt'}</button>
               <button onClick={() => { setShowForm(false); setForm({ description: '', amount: '', date: '', image: null }) }} style={bS}>Cancel</button>
             </div>
           </div>
@@ -465,6 +471,7 @@ function ColourPalette() {
         if (isUnique) unique.push(c)
       })
       setColours(unique.slice(0, 6).map(([r,g,b]) => '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('')))
+      } catch(e) { setError('Could not extract colours') }
     }
     img.src = url
   }
@@ -536,8 +543,10 @@ function BeforeAfterSlider({ projectId, homeId }) {
   const handleAfter = async (e) => { const d = await compress(e.target.files[0]); setAfter(d); await setDoc(doc(db, 'homes', homeId, 'projects', projectId, 'beforeAfter', 'images'), { before: before || null, after: d }, { merge: true }) }
 
   const onDrag = (e) => {
+    e.preventDefault()
     const rect = sliderRef.current.getBoundingClientRect()
-    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX
+    const x = clientX - rect.left
     setPos(Math.max(0, Math.min(100, (x / rect.width) * 100)))
   }
 
@@ -553,8 +562,11 @@ function BeforeAfterSlider({ projectId, homeId }) {
       </div>
       {before && after ? (
         <div>
-          <div ref={sliderRef} onMouseMove={e => e.buttons && onDrag(e)} onTouchMove={onDrag}
-            style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', cursor: 'col-resize', userSelect: 'none', aspectRatio: '4/3' }}>
+          <div ref={sliderRef}
+            onMouseMove={e => e.buttons && onDrag(e)}
+            onTouchStart={onDrag}
+            onTouchMove={onDrag}
+            style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', cursor: 'col-resize', userSelect: 'none', aspectRatio: '4/3', touchAction: 'none' }}>
             <img src={before} alt="Before" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
             <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', width: pos + '%' }}>
               <img src={after} alt="After" style={{ position: 'absolute', inset: 0, width: sliderRef.current?.offsetWidth || 400, maxWidth: 'none', height: '100%', objectFit: 'cover' }} />
@@ -710,8 +722,8 @@ function QuotesTab({ projectId, homeId }) {
         <div style={{ background: '#FFF7F3', border: '1px solid #F0D5C8', borderRadius: 14, padding: 16, marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>{editingId ? 'Edit Quote' : 'New Quote / Contractor'}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[['contractor','Company / Contractor *','e.g. Riverside Kitchens'],['trade','Trade / Service','e.g. Kitchen fitting'],['contact','Contact Name','e.g. John Smith'],['phone','Phone','e.g. 07700 900000'],['email','Email','e.g. john@company.com'],['amount','Quote Amount (£)','e.g. 4500']].map(([key, label, ph]) => (
-              <div key={key}><label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B7280', marginBottom: 4 }}>{label}</label><input placeholder={ph} value={form[key]} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} style={iS} /></div>
+            {[['contractor','Company / Contractor *','e.g. Riverside Kitchens','text'],['trade','Trade / Service','e.g. Kitchen fitting','text'],['contact','Contact Name','e.g. John Smith','text'],['phone','Phone','e.g. 07700 900000','tel'],['email','Email','e.g. john@company.com','email'],['amount','Quote Amount (£)','e.g. 4500','number']].map(([key, label, ph, type]) => (
+              <div key={key}><label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B7280', marginBottom: 4 }}>{label}</label><input type={type} placeholder={ph} value={form[key]} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} style={iS} /></div>
             ))}
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B7280', marginBottom: 6 }}>Status</label>
@@ -760,7 +772,7 @@ function QuotesTab({ projectId, homeId }) {
 }
 
 // ─── Discussion with Reactions & @mentions ────────────────────
-function Discussion({ projectId, homeId, currentUser }) {
+function Discussion({ projectId, homeId, currentUser, homeMembers }) {
   const [messages, setMessages] = useState([])
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(true)
@@ -772,11 +784,11 @@ function Discussion({ projectId, homeId, currentUser }) {
     const unsub = onSnapshot(query(collection(db, 'homes', homeId, 'projects', projectId, 'messages'), orderBy('createdAt', 'asc')), snap => {
       setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })))
       setLoading(false)
-      // Mark as read
+      // FIX 11: use UID for read receipts, not name
       snap.docs.forEach(d => {
         const data = d.data()
-        if (data.author !== currentUser.name && !(data.readBy || []).includes(currentUser.name)) {
-          updateDoc(d.ref, { readBy: arrayUnion(currentUser.name) })
+        if (data.authorUid !== currentUser.uid && !(data.readBy || []).includes(currentUser.uid)) {
+          updateDoc(d.ref, { readBy: arrayUnion(currentUser.uid) })
         }
       })
     })
@@ -789,8 +801,8 @@ function Discussion({ projectId, homeId, currentUser }) {
     if (!text.trim()) return
     const msg = text.trim(); setText('')
     await addDoc(collection(db, 'homes', homeId, 'projects', projectId, 'messages'), {
-      author: currentUser.name, avatar: currentUser.avatar, color: currentUser.color,
-      text: msg, createdAt: serverTimestamp(), reactions: {}, readBy: [currentUser.name]
+      author: currentUser.name, authorUid: currentUser.uid, avatar: currentUser.avatar, color: currentUser.color,
+      text: msg, createdAt: serverTimestamp(), reactions: {}, readBy: [currentUser.uid]
     })
   }
 
@@ -819,7 +831,7 @@ function Discussion({ projectId, homeId, currentUser }) {
           const isMe = msg.author === currentUser.name
           const bubbleColor = msg.color || (isMe ? '#C4714A' : '#7A9E87')
           const reactions = msg.reactions || {}
-          const isRead = (msg.readBy || []).filter(n => n !== msg.author).length > 0
+          const isRead = (msg.readBy || []).filter(uid => uid !== currentUser.uid).length > 0
           const hasMention = msg.text?.includes('@' + currentUser.name)
 
           return (
@@ -857,13 +869,15 @@ function Discussion({ projectId, homeId, currentUser }) {
         <div ref={bottomRef} />
       </div>
       <div style={{ borderTop: '1px solid #EDE8E1', padding: '8px 12px', background: '#fff' }}>
-        {/* @mention suggestions */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-          <span style={{ fontSize: 12, color: '#9CA3AF', lineHeight: '28px' }}>Mention:</span>
-          {['Matt','Tara'].filter(n => n !== currentUser.name).map(n => (
-            <button key={n} onClick={() => insertMention(n)} style={{ padding: '4px 10px', background: '#F3F4F6', border: 'none', borderRadius: 99, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, color: '#374151' }}>@{n}</button>
-          ))}
-        </div>
+        {/* FIX 1+16: dynamic @mention from actual home members */}
+        {homeMembers && homeMembers.filter(m => m.uid !== currentUser.uid).length > 0 && (
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: '#9CA3AF', lineHeight: '28px' }}>Mention:</span>
+            {homeMembers.filter(m => m.uid !== currentUser.uid).map(m => (
+              <button key={m.uid} onClick={() => insertMention(m.name)} style={{ padding: '4px 10px', background: '#F3F4F6', border: 'none', borderRadius: 99, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, color: '#374151' }}>@{m.name}</button>
+            ))}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8, paddingBottom: 'max(4px, env(safe-area-inset-bottom))' }}>
           <textarea ref={inputRef} value={text} onChange={e => setText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }}}
@@ -877,8 +891,23 @@ function Discussion({ projectId, homeId, currentUser }) {
 }
 
 // ─── Project Detail ───────────────────────────────────────────
-function ProjectDetail({ project, homeId, currentUser, onBack, onDelete, onArchive }) {
+function ProjectDetail({ project, homeId, currentUser, onBack, onDelete, onArchive, onUnarchive }) {
   const [tab, setTab] = useState('overview')
+  const [homeMembers, setHomeMembers] = useState([])
+
+  useEffect(() => {
+    // FIX 1: Load real member profiles for @mentions
+    const loadMembers = async () => {
+      try {
+        const homeSnap = await getDoc(doc(db, 'homes', homeId))
+        if (!homeSnap.exists()) return
+        const memberUids = homeSnap.data().members || []
+        const profiles = await Promise.all(memberUids.map(uid => getDoc(doc(db, 'users', uid))))
+        setHomeMembers(profiles.filter(s => s.exists()).map(s => ({ uid: s.id, ...s.data() })))
+      } catch(e) {}
+    }
+    loadMembers()
+  }, [homeId])
   const [showMenu, setShowMenu] = useState(false)
   const [editingStatus, setEditingStatus] = useState(false)
   const [editingBudget, setEditingBudget] = useState(false)
@@ -903,7 +932,10 @@ function ProjectDetail({ project, homeId, currentUser, onBack, onDelete, onArchi
             <button onClick={() => setShowMenu(m => !m)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: 22, padding: '0 0 12px', lineHeight: 1 }}>⋯</button>
             {showMenu && (
               <div style={{ position: 'absolute', right: 0, top: '100%', background: '#fff', borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.15)', overflow: 'hidden', minWidth: 180, zIndex: 100 }}>
-                <button onClick={() => { onArchive(project.id); setShowMenu(false) }} style={{ display: 'block', width: '100%', padding: '14px 18px', border: 'none', background: 'none', textAlign: 'left', fontSize: 15, cursor: 'pointer', color: '#374151', fontFamily: 'inherit' }}>📦 Archive Project</button>
+                {!project.archived
+                  ? <button onClick={() => { onArchive(project.id); setShowMenu(false) }} style={{ display: 'block', width: '100%', padding: '14px 18px', border: 'none', background: 'none', textAlign: 'left', fontSize: 15, cursor: 'pointer', color: '#374151', fontFamily: 'inherit' }}>📦 Archive Project</button>
+                  : <button onClick={() => { onUnarchive(project.id); setShowMenu(false) }} style={{ display: 'block', width: '100%', padding: '14px 18px', border: 'none', background: 'none', textAlign: 'left', fontSize: 15, cursor: 'pointer', color: '#374151', fontFamily: 'inherit' }}>📂 Unarchive Project</button>
+                }
                 <div style={{ height: 1, background: '#F3F4F6' }} />
                 <button onClick={() => { if (window.confirm('Permanently delete this project?')) { onDelete(project.id); setShowMenu(false) } }} style={{ display: 'block', width: '100%', padding: '14px 18px', border: 'none', background: 'none', textAlign: 'left', fontSize: 15, cursor: 'pointer', color: '#C4714A', fontFamily: 'inherit' }}>🗑 Delete Project</button>
               </div>
@@ -955,7 +987,7 @@ function ProjectDetail({ project, homeId, currentUser, onBack, onDelete, onArchi
           </div>
         )}
         {tab === 'tasks' && <TaskChecklist projectId={project.id} homeId={homeId} />}
-        {tab === 'discussion' && <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}><Discussion projectId={project.id} homeId={homeId} currentUser={currentUser} /></div>}
+        {tab === 'discussion' && <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}><Discussion projectId={project.id} homeId={homeId} currentUser={currentUser} homeMembers={homeMembers} /></div>}
         {tab === 'moodboard' && <MoodBoard projectId={project.id} homeId={homeId} moodBoard={project.moodBoard || []} onMoodChange={(mb) => updateDoc(doc(db, 'homes', homeId, 'projects', project.id), { moodBoard: mb })} />}
         {tab === 'images' && <ImagesTab projectId={project.id} homeId={homeId} />}
         {tab === 'beforeafter' && <BeforeAfterSlider projectId={project.id} homeId={homeId} />}
@@ -1083,14 +1115,21 @@ export default function App() {
 
   const createProject = async () => {
     if (!newP.name || !userProfile?.homeId) return
+    // FIX 6: date validation
+    if (newP.startDate && newP.endDate && newP.endDate < newP.startDate) {
+      alert('End date cannot be before start date.'); return
+    }
+    // FIX 7: negative budget
+    const budget = Math.max(0, Number(newP.costEstimate) || 0)
     const ref = doc(collection(db, 'homes', userProfile.homeId, 'projects'))
-    await setDoc(ref, { ...newP, costEstimate: Number(newP.costEstimate) || 0, costSpent: 0, status: 'planning', moodBoard: [], createdBy: authUser.uid, createdAt: serverTimestamp() })
+    await setDoc(ref, { ...newP, costEstimate: budget, costSpent: 0, status: 'planning', moodBoard: [], createdBy: authUser.uid, createdAt: serverTimestamp() })
     setNewP({ name: '', room: '', emoji: '🏠', costEstimate: '', startDate: '', endDate: '', description: '' })
     setShowNew(false); setSelectedId(ref.id)
   }
 
   const handleDelete = async (id) => { await deleteDoc(doc(db, 'homes', userProfile.homeId, 'projects', id)); setSelectedId(null) }
   const handleArchive = async (id) => { await updateDoc(doc(db, 'homes', userProfile.homeId, 'projects', id), { archived: true }); setSelectedId(null) }
+  const handleUnarchive = async (id) => { await updateDoc(doc(db, 'homes', userProfile.homeId, 'projects', id), { archived: false }); setSelectedId(null) }
 
   if (authLoading) return (
     <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, background: '#1C2B3A', fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -1102,12 +1141,12 @@ export default function App() {
   if (!authUser) return <AuthScreen />
   if (!userProfile?.homeId) return <OnboardingScreen user={authUser} />
   if (showAccount) return <AccountSettings userProfile={userProfile} homeData={homeData} onBack={() => setShowAccount(false)} onUpdate={setUserProfile} />
-  if (selected) return <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Inter', system-ui, sans-serif" }}><ProjectDetail project={selected} homeId={userProfile.homeId} currentUser={userProfile} onBack={() => setSelectedId(null)} onDelete={handleDelete} onArchive={handleArchive} /></div>
+  if (selected) return <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Inter', system-ui, sans-serif" }}><ProjectDetail project={selected} homeId={userProfile.homeId} currentUser={userProfile} onBack={() => setSelectedId(null)} onDelete={handleDelete} onArchive={handleArchive} onUnarchive={handleUnarchive} /></div>
 
   if (showNew) return (
     <div style={{ height: '100vh', overflowY: 'auto', background: '#F7F3ED', fontFamily: "'Inter', system-ui, sans-serif" }}>
       <div style={{ background: '#1C2B3A', padding: '16px', paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
-        <button onClick={() => setShowNew(false)} style={{ background: 'none', border: 'none', color: '#7A9E87', fontWeight: 600, cursor: 'pointer', fontSize: 14, padding: 0 }}>← Back</button>
+        <button onClick={() => { if (newP.name && !window.confirm('Discard this project?')) return; setShowNew(false) }} style={{ background: 'none', border: 'none', color: '#7A9E87', fontWeight: 600, cursor: 'pointer', fontSize: 14, padding: 0 }}>← Back</button>
         <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: '#F7F3ED', marginTop: 8 }}>New Project</div>
       </div>
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -1167,6 +1206,13 @@ export default function App() {
               <div style={{ marginTop: 8, fontSize: 12, color: '#9CA3AF' }}>🎨 {(p.moodBoard || []).length} mood items</div>
             </div>
           ))}
+          {activeProjects.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9CA3AF' }}>
+              <div style={{ fontSize: 40, marginBottom: 10 }}>🏗</div>
+              <div style={{ fontWeight: 700, fontSize: 16, color: '#1C2B3A', marginBottom: 6 }}>No projects yet</div>
+              <div style={{ fontSize: 14, marginBottom: 20 }}>Tap below to add your first home project.</div>
+            </div>
+          )}
           <div onClick={() => setShowNew(true)} style={{ background: 'transparent', border: '2px dashed #C4714A', borderRadius: 16, padding: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#C4714A', fontWeight: 700, fontSize: 15 }}>+ Add Project</div>
         </div>
         {archivedProjects.length > 0 && (

@@ -29,42 +29,8 @@ const STATUS_CONFIG = {
   'complete':    { label: 'Complete',    color: '#4A7C6F', bg: '#E6F0EE' },
 }
 
-const SEED_PROJECTS = [
-  {
-    id: 'kitchen', name: 'Kitchen Renovation', room: 'Kitchen', emoji: '🍳',
-    status: 'in-progress', costEstimate: 12500, costSpent: 3200,
-    startDate: '2026-05-01', endDate: '2026-08-15',
-    description: 'Full kitchen remodel including new cabinets, countertops, and appliances.',
-    moodBoard: [
-      { id: 'mb1', type: 'color', value: '#E8DDD0', label: 'Cabinet tone' },
-      { id: 'mb2', type: 'color', value: '#2C2C2C', label: 'Hardware' },
-      { id: 'mb3', type: 'link', url: 'https://pinterest.com/search/pins/?q=modern+farmhouse+kitchen', label: 'Farmhouse inspo' },
-      { id: 'mb4', type: 'note', text: 'Shaker-style doors, brushed brass handles, open shelving on one wall', label: 'Style note' },
-    ],
-  },
-  {
-    id: 'bedroom', name: 'Master Bedroom Refresh', room: 'Bedroom', emoji: '🛏',
-    status: 'planning', costEstimate: 3800, costSpent: 0,
-    startDate: '2026-09-01', endDate: '2026-10-15',
-    description: 'New paint, lighting upgrade, built-in wardrobe and styling.',
-    moodBoard: [
-      { id: 'mb1', type: 'color', value: '#5C6E6E', label: 'Feature wall' },
-      { id: 'mb2', type: 'link', url: 'https://pinterest.com/search/pins/?q=moody+bedroom+green+dark', label: 'Dark bedroom inspo' },
-      { id: 'mb3', type: 'note', text: "Farrow & Ball 'Mizzle' or 'Calke Green' for the accent wall", label: 'Paint shortlist' },
-    ],
-  },
-  {
-    id: 'deck', name: 'Backyard Deck', room: 'Garden', emoji: '🌿',
-    status: 'not-started', costEstimate: 18000, costSpent: 0,
-    startDate: '2026-11-01', endDate: '2027-02-28',
-    description: 'Timber deck with built-in seating, outdoor lighting, and garden beds.',
-    moodBoard: [
-      { id: 'mb1', type: 'color', value: '#8B6F47', label: 'Timber stain' },
-      { id: 'mb2', type: 'link', url: 'https://pinterest.com/search/pins/?q=timber+deck+outdoor+lighting', label: 'Deck ideas' },
-      { id: 'mb3', type: 'note', text: 'Get at least 3 quotes. Check council regulations for deck height.', label: 'To-do' },
-    ],
-  },
-]
+// No seed projects — app starts blank
+const SEED_PROJECTS = []
 
 // £ currency formatter
 function fmt(n) { return '£' + (n || 0).toLocaleString('en-GB') }

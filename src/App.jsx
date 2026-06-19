@@ -402,20 +402,31 @@ function ImagesTab({ projectId }) {
   const upload = async (e) => {
     const file = e.target.files[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = async (ev) => {
+    // Compress image before saving to Firestore
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = async () => {
+      const canvas = document.createElement('canvas')
+      const MAX = 800
+      let w = img.width, h = img.height
+      if (w > h && w > MAX) { h = (h * MAX) / w; w = MAX }
+      else if (h > MAX) { w = (w * MAX) / h; h = MAX }
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      const compressed = canvas.toDataURL('image/jpeg', 0.7)
+      URL.revokeObjectURL(objectUrl)
       await addDoc(collection(db, 'projects', projectId, 'images'), {
-        data: ev.target.result,
+        data: compressed,
         name: file.name,
         createdAt: serverTimestamp(),
       })
     }
-    reader.readAsDataURL(file)
+    img.src = objectUrl
+    e.target.value = ''
   }
 
   const deleteImage = async (id) => {
-    const ref = doc(db, 'projects', projectId, 'images', id)
-    await updateDoc(ref, { deleted: true }).catch(() => {})
+    await deleteDoc(doc(db, 'projects', projectId, 'images', id)).catch(() => {})
     setImages(imgs => imgs.filter(i => i.id !== id))
   }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   collection, doc, onSnapshot, setDoc, updateDoc, addDoc,
-  serverTimestamp, query, orderBy, getDoc
+  deleteDoc, serverTimestamp, query, orderBy, getDoc
 } from 'firebase/firestore'
 import { db } from './firebase.js'
 
@@ -529,8 +529,9 @@ function Discussion({ projectId, currentUser }) {
 }
 
 // ─── Project Detail ───────────────────────────────────────────
-function ProjectDetail({ project, currentUser, onBack }) {
+function ProjectDetail({ project, currentUser, onBack, onDelete, onArchive }) {
   const [tab, setTab] = useState('overview')
+  const [showMenu, setShowMenu] = useState(false)
   const [editingStatus, setEditingStatus] = useState(false)
   const [editingBudget, setEditingBudget] = useState(false)
   const [editingSpent, setEditingSpent] = useState(false)
@@ -546,10 +547,36 @@ function ProjectDetail({ project, currentUser, onBack }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#F7F3ED' }}>
       <div style={{ background: '#1C2B3A', padding: '16px 16px 0', paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#7A9E87',
-          fontWeight: 600, cursor: 'pointer', fontSize: 14, padding: '0 0 12px', display: 'block' }}>
-          ← Back
-        </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0 }}>
+          <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#7A9E87',
+            fontWeight: 600, cursor: 'pointer', fontSize: 14, padding: '0 0 12px' }}>
+            ← Back
+          </button>
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setShowMenu(m => !m)}
+              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)',
+                cursor: 'pointer', fontSize: 22, padding: '0 0 12px', lineHeight: 1 }}>⋯</button>
+            {showMenu && (
+              <div style={{ position: 'absolute', right: 0, top: '100%', background: '#fff',
+                borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.15)', overflow: 'hidden',
+                minWidth: 180, zIndex: 100 }}>
+                <button onClick={() => { onArchive(project.id); setShowMenu(false) }}
+                  style={{ display: 'block', width: '100%', padding: '14px 18px', border: 'none',
+                    background: 'none', textAlign: 'left', fontSize: 15, cursor: 'pointer',
+                    color: '#374151', fontFamily: 'inherit' }}>
+                  📦 Archive Project
+                </button>
+                <div style={{ height: 1, background: '#F3F4F6' }} />
+                <button onClick={() => { if (window.confirm('Permanently delete this project? This cannot be undone.')) { onDelete(project.id); setShowMenu(false) } }}
+                  style={{ display: 'block', width: '100%', padding: '14px 18px', border: 'none',
+                    background: 'none', textAlign: 'left', fontSize: 15, cursor: 'pointer',
+                    color: '#C4714A', fontFamily: 'inherit' }}>
+                  🗑 Delete Project
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
           <span style={{ fontSize: 26 }}>{project.emoji}</span>
           <div style={{ flex: 1 }}>
@@ -676,6 +703,16 @@ export default function App() {
 
   const handleLogin = (u) => { sessionStorage.setItem('ourhome_user', JSON.stringify(u)); setUser(u) }
   const handleLogout = () => { sessionStorage.removeItem('ourhome_user'); setUser(null) }
+
+  const handleDelete = async (id) => {
+    await deleteDoc(doc(db, 'projects', id))
+    setSelectedId(null)
+  }
+
+  const handleArchive = async (id) => {
+    await updateDoc(doc(db, 'projects', id), { archived: true })
+    setSelectedId(null)
+  }
   const handleUserUpdate = (updated) => {
     sessionStorage.setItem('ourhome_user', JSON.stringify(updated))
     setUser(updated)
@@ -705,9 +742,11 @@ export default function App() {
   }, [user])
 
   const selected = projects.find(p => p.id === selectedId)
-  const totalBudget = projects.reduce((s, p) => s + (p.costEstimate || 0), 0)
-  const totalSpent  = projects.reduce((s, p) => s + (p.costSpent  || 0), 0)
-  const inProgress  = projects.filter(p => p.status === 'in-progress').length
+  const activeProjects = projects.filter(p => !p.archived)
+  const archivedProjects = projects.filter(p => p.archived)
+  const totalBudget = activeProjects.reduce((s, p) => s + (p.costEstimate || 0), 0)
+  const totalSpent  = activeProjects.reduce((s, p) => s + (p.costSpent  || 0), 0)
+  const inProgress  = activeProjects.filter(p => p.status === 'in-progress').length
 
   const createProject = async () => {
     if (!newP.name) return
@@ -727,7 +766,8 @@ export default function App() {
 
   if (selected) return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <ProjectDetail project={selected} currentUser={user} onBack={() => setSelectedId(null)} />
+      <ProjectDetail project={selected} currentUser={user} onBack={() => setSelectedId(null)}
+        onDelete={handleDelete} onArchive={handleArchive} />
     </div>
   )
 
@@ -819,7 +859,7 @@ export default function App() {
             <div style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF',
               letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Projects</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {projects.map(p => (
+              {activeProjects.map(p => (
                 <div key={p.id} onClick={() => setSelectedId(p.id)}
                   style={{ background: '#fff', borderRadius: 16, padding: 16, cursor: 'pointer',
                     boxShadow: '0 1px 6px rgba(0,0,0,0.07)', border: '1px solid #EDE8E1' }}>
@@ -847,6 +887,37 @@ export default function App() {
                 + Add Project
               </div>
             </div>
+
+            {/* Archived projects */}
+            {archivedProjects.length > 0 && (
+              <div style={{ marginTop: 24 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF',
+                  letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
+                  📦 Archived ({archivedProjects.length})
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {archivedProjects.map(p => (
+                    <div key={p.id} onClick={() => setSelectedId(p.id)}
+                      style={{ background: '#fff', borderRadius: 14, padding: '12px 16px', cursor: 'pointer',
+                        border: '1px solid #EDE8E1', opacity: 0.7, display: 'flex',
+                        alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 20 }}>{p.emoji}</span>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: '#6B7280' }}>{p.name}</div>
+                          <div style={{ fontSize: 11, color: '#9CA3AF' }}>{p.room}</div>
+                        </div>
+                      </div>
+                      <button onClick={(e) => { e.stopPropagation(); updateDoc(doc(db, 'projects', p.id), { archived: false }) }}
+                        style={{ fontSize: 11, color: '#7A9E87', background: '#EDF4EF', border: 'none',
+                          borderRadius: 8, padding: '4px 10px', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>
+                        Restore
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

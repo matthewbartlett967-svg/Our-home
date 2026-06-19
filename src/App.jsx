@@ -430,6 +430,187 @@ function ImagesTab({ projectId }) {
   )
 }
 
+// ─── Quotes & Contractors ────────────────────────────────────
+function QuotesTab({ projectId }) {
+  const [quotes, setQuotes] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const emptyForm = { contractor: '', trade: '', contact: '', phone: '', email: '', amount: '', status: 'pending', notes: '' }
+  const [form, setForm] = useState(emptyForm)
+
+  const QUOTE_STATUSES = {
+    'pending':  { label: 'Pending',   color: '#9CA3AF', bg: '#F3F4F6' },
+    'received': { label: 'Received',  color: '#7A9E87', bg: '#EDF4EF' },
+    'accepted': { label: 'Accepted',  color: '#4A7C6F', bg: '#E6F0EE' },
+    'rejected': { label: 'Rejected',  color: '#C4714A', bg: '#FAF0EB' },
+  }
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(collection(db, 'projects', projectId, 'quotes'), orderBy('createdAt', 'asc')),
+      snap => { setQuotes(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false) }
+    )
+    return unsub
+  }, [projectId])
+
+  const save = async () => {
+    if (!form.contractor) return
+    if (editingId) {
+      await updateDoc(doc(db, 'projects', projectId, 'quotes', editingId), { ...form })
+    } else {
+      await addDoc(collection(db, 'projects', projectId, 'quotes'), { ...form, createdAt: serverTimestamp() })
+    }
+    setForm(emptyForm); setShowForm(false); setEditingId(null)
+  }
+
+  const deleteQuote = async (id) => {
+    if (window.confirm('Delete this quote?')) {
+      await deleteDoc(doc(db, 'projects', projectId, 'quotes', id))
+    }
+  }
+
+  const startEdit = (q) => {
+    setForm({ contractor: q.contractor || '', trade: q.trade || '', contact: q.contact || '',
+      phone: q.phone || '', email: q.email || '', amount: q.amount || '',
+      status: q.status || 'pending', notes: q.notes || '' })
+    setEditingId(q.id)
+    setShowForm(true)
+  }
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#9CA3AF' }}>Loading…</div>
+
+  return (
+    <div style={{ padding: 16 }}>
+      {!showForm && (
+        <button onClick={() => { setShowForm(true); setEditingId(null); setForm(emptyForm) }}
+          style={{ ...bP, width: '100%', marginBottom: 16, padding: 14, borderRadius: 12, fontSize: 15 }}>
+          + Add Quote / Contractor
+        </button>
+      )}
+
+      {showForm && (
+        <div style={{ background: '#FFF7F3', border: '1px solid #F0D5C8', borderRadius: 14, padding: 16, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14, color: '#1C2B3A' }}>
+            {editingId ? 'Edit Quote' : 'New Quote / Contractor'}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[
+              { label: 'Company / Contractor Name *', key: 'contractor', placeholder: 'e.g. Riverside Kitchens' },
+              { label: 'Trade / Service', key: 'trade', placeholder: 'e.g. Kitchen fitting, Plumbing' },
+              { label: 'Contact Name', key: 'contact', placeholder: 'e.g. John Smith' },
+              { label: 'Phone Number', key: 'phone', placeholder: 'e.g. 07700 900000', type: 'tel' },
+              { label: 'Email', key: 'email', placeholder: 'e.g. john@company.com', type: 'email' },
+              { label: 'Quote Amount (£)', key: 'amount', placeholder: 'e.g. 4500', type: 'number' },
+            ].map(f => (
+              <div key={f.key}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B7280', marginBottom: 4 }}>{f.label}</label>
+                <input type={f.type || 'text'} placeholder={f.placeholder} value={form[f.key]}
+                  onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                  style={{ width: '100%', ...iS, fontSize: 15, boxSizing: 'border-box' }} />
+              </div>
+            ))}
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B7280', marginBottom: 4 }}>Status</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {Object.entries(QUOTE_STATUSES).map(([key, cfg]) => (
+                  <button key={key} onClick={() => setForm(p => ({ ...p, status: key }))}
+                    style={{ padding: '6px 14px', borderRadius: 99, border: 'none', cursor: 'pointer',
+                      fontWeight: 600, fontSize: 12, fontFamily: 'inherit',
+                      background: form.status === key ? cfg.color : '#F3F4F6',
+                      color: form.status === key ? '#fff' : '#6B7280' }}>
+                    {cfg.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6B7280', marginBottom: 4 }}>Notes</label>
+              <textarea placeholder="Any additional notes..." value={form.notes} rows={3}
+                onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                style={{ width: '100%', ...iS, resize: 'vertical', fontSize: 15, boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={save} style={{ ...bP, flex: 1 }}>
+                {editingId ? 'Save Changes' : 'Add Quote'}
+              </button>
+              <button onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm) }} style={bS}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {quotes.length === 0 && !showForm ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9CA3AF' }}>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>📋</div>
+          <div style={{ fontWeight: 600 }}>No quotes yet</div>
+          <div style={{ fontSize: 13, marginTop: 4 }}>Add contractor details and quotes above.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {quotes.map(q => {
+            const st = QUOTE_STATUSES[q.status] || QUOTE_STATUSES['pending']
+            return (
+              <div key={q.id} style={{ background: '#fff', borderRadius: 14, padding: 16,
+                border: '1px solid #EDE8E1', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: '#1C2B3A' }}>{q.contractor}</div>
+                    {q.trade && <div style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>{q.trade}</div>}
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 99,
+                    color: st.color, background: st.bg, letterSpacing: '0.04em', textTransform: 'uppercase', flexShrink: 0 }}>
+                    {st.label}
+                  </span>
+                </div>
+
+                {q.amount && (
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#1C2B3A',
+                    fontFamily: "'Playfair Display', serif", marginBottom: 10 }}>
+                    £{Number(q.amount).toLocaleString('en-GB')}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                  {q.contact && (
+                    <div style={{ fontSize: 13, color: '#374151' }}>👤 {q.contact}</div>
+                  )}
+                  {q.phone && (
+                    <a href={`tel:${q.phone}`} style={{ fontSize: 13, color: '#C4714A', textDecoration: 'none', fontWeight: 600 }}>
+                      📞 {q.phone}
+                    </a>
+                  )}
+                  {q.email && (
+                    <a href={`mailto:${q.email}`} style={{ fontSize: 13, color: '#C4714A', textDecoration: 'none', fontWeight: 600 }}>
+                      ✉️ {q.email}
+                    </a>
+                  )}
+                  {q.notes && (
+                    <div style={{ fontSize: 13, color: '#6B7280', marginTop: 4, padding: '8px 10px',
+                      background: '#F9FAFB', borderRadius: 8, lineHeight: 1.5 }}>{q.notes}</div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, borderTop: '1px solid #F3F4F6', paddingTop: 10 }}>
+                  <button onClick={() => startEdit(q)}
+                    style={{ ...bS, fontSize: 13, padding: '6px 14px' }}>Edit</button>
+                  <button onClick={() => deleteQuote(q.id)}
+                    style={{ fontSize: 13, padding: '6px 14px', background: 'transparent',
+                      color: '#C4714A', border: '1px solid #F0D5C8', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Delete
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Discussion ───────────────────────────────────────────────
 function Discussion({ projectId, currentUser }) {
   const [messages, setMessages] = useState([])
@@ -580,7 +761,7 @@ function ProjectDetail({ project, currentUser, onBack, onDelete, onArchive }) {
           </div>
         </div>
         <div style={{ display: 'flex' }}>
-          {[['overview','Overview'],['discussion','Chat'],['moodboard','Mood Board'],['images','Photos']].map(([id, label]) => (
+          {[['overview','Overview'],['discussion','Chat'],['moodboard','Mood Board'],['images','Photos'],['quotes','Quotes']].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)}
               style={{ flex: 1, padding: '10px 0', border: 'none', fontFamily: 'inherit',
                 borderBottom: tab === id ? '2.5px solid #C4714A' : '2.5px solid transparent',
@@ -660,6 +841,7 @@ function ProjectDetail({ project, currentUser, onBack, onDelete, onArchive }) {
           />
         )}
         {tab === 'images' && <ImagesTab projectId={project.id} />}
+        {tab === 'quotes' && <QuotesTab projectId={project.id} />}
       </div>
     </div>
   )

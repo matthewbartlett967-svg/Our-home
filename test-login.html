@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Firebase Auth Test</title>
+  <style>
+    body { font-family: system-ui; background: #1C2B3A; display: flex; align-items: center;
+      justify-content: center; min-height: 100vh; margin: 0; }
+    .box { background: rgba(255,255,255,0.08); border-radius: 16px; padding: 32px;
+      width: 100%; max-width: 340px; }
+    h2 { color: #F7F3ED; margin: 0 0 24px; font-size: 20px; }
+    input { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.08); color: #F7F3ED; font-size: 15px;
+      margin-bottom: 12px; box-sizing: border-box; outline: none; }
+    button { width: 100%; padding: 13px; background: #C4714A; color: #fff; border: none;
+      border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; }
+    .result { margin-top: 16px; padding: 12px 14px; border-radius: 10px; font-size: 14px; display: none; }
+    .success { background: rgba(122,158,135,0.2); color: #7A9E87; display: block; }
+    .error { background: rgba(196,113,74,0.2); color: #F0A080; display: block; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>🔥 Firebase Auth Test</h2>
+    <input type="email" id="email" placeholder="Email" autocapitalize="none" />
+    <input type="password" id="password" placeholder="Password" />
+    <button onclick="testLogin()">Test Login</button>
+    <div id="result" class="result"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"
+    import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"
+
+    const app = initializeApp({
+      apiKey: "AIzaSyCLW4T728qGnuHFaYa2hDmKyUcutWgZiQg",
+      authDomain: "our-home-8df86.firebaseapp.com",
+      projectId: "our-home-8df86",
+      storageBucket: "our-home-8df86.firebasestorage.app",
+      messagingSenderId: "876707730533",
+      appId: "1:876707730533:web:4b5afd45746b544784228c"
+    })
+
+    const auth = getAuth(app)
+
+    window.testLogin = async () => {
+      const email = document.getElementById('email').value.trim()
+      const password = document.getElementById('password').value.trim()
+      const result = document.getElementById('result')
+      result.className = 'result'
+      result.textContent = 'Testing...'
+      result.style.display = 'block'
+
+      try {
+        const cred = await signInWithEmailAndPassword(auth, email, password)
+        result.className = 'result success'
+        result.textContent = '✅ SUCCESS! Logged in as: ' + cred.user.email
+      } catch (e) {
+        result.className = 'result error'
+        result.textContent = '❌ FAILED: ' + e.code + ' — ' + e.message
+      }
+    }
+  </script>
+</body>
+</html>
